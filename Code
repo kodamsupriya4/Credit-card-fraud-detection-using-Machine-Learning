@@ -1,0 +1,107 @@
+import pandas as pd
+import pickle
+import warnings
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import SMOTE
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Load dataset
+data = pd.read_csv('C:\\Users\\91939\\OneDrive\\Documents\\creditcarddataset.csv')
+
+# Preprocessing
+le = LabelEncoder()
+for column in data.columns:
+    if data[column].dtype == 'object':
+        data[column] = le.fit_transform(data[column])
+
+data = data.drop('Unnamed: 0', axis=1)
+
+# Split dataset
+X = data.drop('is_fraud', axis=1)
+y = data['is_fraud']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Get count of fraudulent transactions before balancing
+print("Counts before balancing:")
+print(y_train.value_counts())
+
+# Apply under-sampling
+rus = RandomUnderSampler(sampling_strategy='majority')
+X_resampled, y_resampled = rus.fit_resample(X_train, y_train)
+
+# Get count of fraudulent transactions after under-sampling
+print("\nCounts after under-sampling:")
+print(pd.Series(y_resampled).value_counts())
+
+# Apply over-sampling
+smote = SMOTE()
+X_resampled_smote, y_resampled_smote = smote.fit_resample(X_train, y_train)
+
+# Get count of fraudulent transactions after over-sampling
+print("\nCounts after over-sampling:")
+print(pd.Series(y_resampled_smote).value_counts())
+
+# Train models
+models = {
+    "Logistic Regression": LogisticRegression(),
+    "Decision Tree": DecisionTreeClassifier(),
+    "Random Forest": RandomForestClassifier()
+}
+
+accuracy_scores = {}
+f1_scores = {}
+
+best_model = None
+best_accuracy = 0
+best_f1_score = 0
+
+for name, model in models.items():
+    # Train on under-sampled data
+    model.fit(X_resampled, y_resampled)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    print(f"\n{name} (Under-sampled Data) Metrics:")
+    print(f"Accuracy={accuracy}, Precision={precision}, Recall={recall}, F1 Score={f1}")
+
+    accuracy_scores[name + " (Under-sampled Data)"] = accuracy
+    f1_scores[name + " (Under-sampled Data)"] = f1
+
+    # Train on over-sampled data
+    model.fit(X_resampled_smote, y_resampled_smote)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    print(f"\n{name} (Over-sampled Data) Metrics:")
+    print(f"Accuracy={accuracy}, Precision={precision}, Recall={recall}, F1 Score={f1}")
+
+    accuracy_scores[name + " (Over-sampled Data)"] = accuracy
+    f1_scores[name + " (Over-sampled Data)"] = f1
+
+    # Determine best model based on accuracy and F1 score
+    if accuracy + f1 > best_accuracy + best_f1_score:
+        best_accuracy = accuracy
+        best_f1_score = f1
+        best_model = model
+        best_model_name = name
+
+# Save the best model
+with open('best_model.pkl', 'wb') as model_file:
+    pickle.dump(best_model, model_file)
+
+print(f"\nBest Model: {best_model_name}")
+print(f"Accuracy: {best_accuracy}")
+print(f"F1 Score: {best_f1_score}")
